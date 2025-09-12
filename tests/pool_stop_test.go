@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	pool "example.com/ksb/pool/pool"
+	pool "github.com/OptonGroup/kaspersky-safeboard-go-sandbox-development-team/pool"
 )
 
 func TestStop_RejectsNewSubmits(t *testing.T) {
