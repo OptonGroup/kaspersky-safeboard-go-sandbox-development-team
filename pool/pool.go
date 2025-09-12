@@ -50,6 +50,8 @@ type poolImpl struct {
 
 	tasks chan func()
 	wg    sync.WaitGroup
+
+	stopOnce sync.Once
 }
 
 // NewPool constructs a new Pool instance.
@@ -90,27 +92,31 @@ func NewPool(workers, queueSize int, opts ...Option) (Pool, error) {
 
 func (p *poolImpl) Submit(task func()) error {
 	p.mu.Lock()
-	stopped := p.stopped
-	p.mu.Unlock()
-	if stopped {
+	if p.stopped {
+		p.mu.Unlock()
 		return ErrStopped
 	}
+	// protected send under lock to avoid racing with close(p.tasks)
 	select {
 	case p.tasks <- task:
+		p.mu.Unlock()
 		return nil
 	default:
+		p.mu.Unlock()
 		return ErrQueueFull
 	}
 }
 
-// Stop marks the pool as stopped. Idempotency and waiting logic will be added later.
 func (p *poolImpl) Stop() error {
-	p.mu.Lock()
-	if p.stopped {
+	p.stopOnce.Do(func() {
+		p.mu.Lock()
+		if !p.stopped {
+			p.stopped = true
+			close(p.tasks)
+		}
 		p.mu.Unlock()
-		return nil
-	}
-	p.stopped = true
-	p.mu.Unlock()
+		// wait for workers to exit
+		p.wg.Wait()
+	})
 	return nil
 }
