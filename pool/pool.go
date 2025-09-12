@@ -47,6 +47,9 @@ type poolImpl struct {
 
 	mu      sync.Mutex
 	stopped bool
+
+	tasks chan func()
+	wg    sync.WaitGroup
 }
 
 // NewPool constructs a new Pool instance.
@@ -67,11 +70,24 @@ func NewPool(workers, queueSize int, opts ...Option) (Pool, error) {
 		workersCount: workers,
 		queueSize:    queueSize,
 		cfg:          cfg,
+		tasks:        make(chan func(), queueSize),
+	}
+
+	// Start workers (Step 2: minimal happy path)
+	for i := 0; i < p.workersCount; i++ {
+		p.wg.Add(1)
+		go func() {
+			defer p.wg.Done()
+			for task := range p.tasks {
+				if task != nil {
+					task()
+				}
+			}
+		}()
 	}
 	return p, nil
 }
 
-// Submit: Step 1 returns ErrStopped until workers/queue are implemented in Step 2.
 func (p *poolImpl) Submit(task func()) error {
 	p.mu.Lock()
 	stopped := p.stopped
@@ -79,7 +95,12 @@ func (p *poolImpl) Submit(task func()) error {
 	if stopped {
 		return ErrStopped
 	}
-	return ErrStopped
+	select {
+	case p.tasks <- task:
+		return nil
+	default:
+		return ErrQueueFull
+	}
 }
 
 // Stop marks the pool as stopped. Idempotency and waiting logic will be added later.
