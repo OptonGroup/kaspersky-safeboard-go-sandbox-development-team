@@ -2,6 +2,8 @@ package pool
 
 import (
 	"errors"
+	"log"
+	"runtime/debug"
 	"sync"
 )
 
@@ -81,9 +83,21 @@ func NewPool(workers, queueSize int, opts ...Option) (Pool, error) {
 		go func() {
 			defer p.wg.Done()
 			for task := range p.tasks {
-				if task != nil {
-					task()
+				if task == nil {
+					continue
 				}
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							log.Printf("pool: task panic: %v\n%s", r, string(debug.Stack()))
+						}
+						if hook := p.cfg.onTaskDone; hook != nil {
+							defer func() { _ = recover() }()
+							hook()
+						}
+					}()
+					task()
+				}()
 			}
 		}()
 	}
