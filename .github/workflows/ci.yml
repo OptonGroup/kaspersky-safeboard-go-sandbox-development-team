@@ -21,7 +21,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.25.x'
           cache: true
 
       - name: Enable toolchain auto (allow newer Go than runner)
@@ -36,11 +36,8 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Run full test suite
-        run: go test -race -count=1 ./...
-
-      - name: Run /tests with coverage
-        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./tests
+      - name: Test with race and coverage
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -48,5 +45,6 @@ jobs:
           name: coverage
           path: coverage.out
           if-no-files-found: ignore
+
 
 
